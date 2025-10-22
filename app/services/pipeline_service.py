@@ -90,7 +90,7 @@ async def run_pipeline(pipeline_id: str):
     graph = {nid: [] for nid in nodes}       # node -> list of downstream nodes
     indegree = {nid: 0 for nid in nodes}    # node -> number of upstream dependencies
     for edge in edges:
-        graph[edge["from"]].append(edge["to"])
+        graph[edge["from"]].append(edge["to"]) # edge : u -> v, graph[u] = v, indegree[v]+=1
         indegree[edge["to"]] += 1
     """
     Step 04 : Initialize tracking structures
