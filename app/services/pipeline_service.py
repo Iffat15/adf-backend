@@ -9,6 +9,8 @@ from app.db_config import db
 from app.utils.io_utils import capture_stdout
 from app.utils.temp_paths import TEMP_DIR
 from datetime import datetime
+from app.models.pipeline_model import PipelineModel
+
 
 PROJECT_ROOT = os.path.dirname(os.path.abspath(__file__))
 EXECUTION_LOG_FILE = os.path.join(PROJECT_ROOT, "execution_order.json")
@@ -480,14 +482,30 @@ async def run_pipeline(pipeline_id: str):
 
 
 # Save pipeline to DB
-async def save_pipeline_to_db(name: str, description: str, nodes: list, connections: list):
+async def save_pipeline_to_db(
+    # name: str, description: str, nodes: list, connections: list
+    pipeline: PipelineModel
+    ):
+    # pipeline_doc = {
+    #     "name": name,
+    #     "description": description,
+    #     "nodes": nodes,
+    #     "connections": connections,
+    #     "created_at": datetime.utcnow(),
+    #     "updated_at": datetime.utcnow()
+    # }
+    # result = await db.pipelines.insert_one(pipeline_doc)
+    # return {"status": "✅ Pipeline saved successfully", "pipeline_id": str(result.inserted_id)}
+
     pipeline_doc = {
-        "name": name,
-        "description": description,
-        "nodes": nodes,
-        "connections": connections,
+        "name": pipeline.name,
+        "description": pipeline.description or "",
+        "nodes": pipeline.nodes,
+        "connections": [conn.dict(by_alias=True) for conn in pipeline.connections],
         "created_at": datetime.utcnow(),
         "updated_at": datetime.utcnow()
     }
     result = await db.pipelines.insert_one(pipeline_doc)
-    return {"status": "✅ Pipeline saved successfully", "pipeline_id": str(result.inserted_id)}
+    return {
+        "status": "✅ Pipeline saved successfully",
+        "pipeline_id": str(result.inserted_id)}
