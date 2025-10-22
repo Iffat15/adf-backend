@@ -1,0 +1,14 @@
+{
+  "data": [
+    {
+      "customer_id": 1,
+      "name": "Alice",
+      "age": 25
+    },
+    {
+      "customer_id": 3,
+      "name": "Charlie",
+      "age": 30
+    }
+  ]
+}

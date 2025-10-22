@@ -18,21 +18,61 @@ EXECUTION_LOG_FILE = os.path.join(PROJECT_ROOT, "execution_order.json")
 # Ensure TEMP_DIR exists
 os.makedirs(TEMP_DIR, exist_ok=True)
 
-def execute_node(script_doc, prev_output_data):
+# def execute_node(script_doc, prev_output_data):
+#     code = script_doc.get("code", "")
+#     name = script_doc.get("name", "unnamed_script.py")
+
+#     if not code.strip():
+#         raise Exception(f"Script {name} is empty")
+
+#     exec_globals = {"__name__": "__main__"}
+#     if prev_output_data:
+#         exec_globals["INPUT_DATA"] = prev_output_data
+
+#     current_output_path = os.path.join(TEMP_DIR, f"{ObjectId()}.json")
+#     exec_globals["OUTPUT_PATH"] = current_output_path
+
+#     print(f"[DEBUG] Executing {name} with INPUT_DATA = {prev_output_data}")  # <-- add this
+
+#     try:
+#         output_text = capture_stdout(code, exec_globals)
+#     except Exception as e:
+#         output_text = f"[ERROR] Node execution failed: {e}"
+
+#     node_output = None
+#     if os.path.exists(current_output_path):
+#         with open(current_output_path, "r") as f:
+#             try:
+#                 node_output = json.load(f)
+#             except json.JSONDecodeError:
+#                 node_output = None
+
+#     print(f"[EXECUTED] Node: {name}, Output Path: {current_output_path}")
+#     return {"node": name, "stdout": output_text, "output_data": node_output, "path": current_output_path}
+
+def execute_node(script_doc, prev_output_data, node_params=None):
+    import copy
     code = script_doc.get("code", "")
     name = script_doc.get("name", "unnamed_script.py")
 
     if not code.strip():
         raise Exception(f"Script {name} is empty")
 
+    # Prepare globals for exec
     exec_globals = {"__name__": "__main__"}
+    
+    # Pass previous outputs
     if prev_output_data:
         exec_globals["INPUT_DATA"] = prev_output_data
+    
+    # Pass node-specific params
+    exec_globals["NODE_PARAMS"] = node_params or {}
 
+    # Output path for this node
     current_output_path = os.path.join(TEMP_DIR, f"{ObjectId()}.json")
     exec_globals["OUTPUT_PATH"] = current_output_path
 
-    print(f"[DEBUG] Executing {name} with INPUT_DATA = {prev_output_data}")  # <-- add this
+    print(f"[DEBUG] Executing {name} with INPUT_DATA = {prev_output_data}, NODE_PARAMS = {node_params}")
 
     try:
         output_text = capture_stdout(code, exec_globals)
@@ -50,6 +90,8 @@ def execute_node(script_doc, prev_output_data):
     print(f"[EXECUTED] Node: {name}, Output Path: {current_output_path}")
     return {"node": name, "stdout": output_text, "output_data": node_output, "path": current_output_path}
 
+
+
 def cleanup_temp_dir():
     for filename in os.listdir(TEMP_DIR):
         file_path = os.path.join(TEMP_DIR, filename)
@@ -58,164 +100,327 @@ def cleanup_temp_dir():
         except Exception as e:
             print(f"[WARN] Failed to delete temp file {file_path}: {e}")
 
+import math
+
+def clean_for_json(obj):
+    if isinstance(obj, dict):
+        return {k: clean_for_json(v) for k, v in obj.items()}
+    elif isinstance(obj, list):
+        return [clean_for_json(x) for x in obj]
+    elif isinstance(obj, float):
+        if math.isnan(obj) or math.isinf(obj):
+            return None  # Replace NaN/Inf with None
+        return obj
+    else:
+        return obj
+# async def run_pipeline(pipeline_id: str):
+#     """
+#     1. This function executes a pipeline given its pipeline_id.
+#     2. It respects the DAG structure of the pipeline (Directed Acyclic Graph),
+#     i.e., nodes run only after their upstream dependencies finish.
+#     3. It supports parallel execution of nodes that can run independently.
+#     """
+    
+#     """
+#     Step- 01 : Fetch the pipeline from MongoDB
+#     """
+#     pipeline = await db.pipelines.find_one({"_id": ObjectId(pipeline_id)})
+#     if not pipeline:
+#         raise HTTPException(status_code=404, detail="Pipeline not found")
+#     """
+#     Step- 02 : Prepare nodes and edges
+#             1.nodes is a dictionary mapping each node_id to a simple object.
+#             2.edges is a list of connections, each of the form {"from": <node_id>, "to": <node_id>
+#     """
+#     # node_id -> node mapping
+#     nodes = {n: {"node_id": n} for n in pipeline.get("nodes", [])}
+#     edges = pipeline.get("connections", [])
+
+#     """
+#     Step 03 : Build dependency Graph
+#             1.graph → adjacency list for downstream nodes.
+#             2.indegree → number of upstream dependencies for each node.
+#             3.This allows us to find ready nodes (nodes with indegree=0) that can run immediately.
+#     """
+#     graph = {nid: [] for nid in nodes}       # initialising every node has no indegree - E1 : [],E2 : [] and so on
+#     indegree = {nid: 0 for nid in nodes}    # Initialising every nodes indegree as zero
+#     for edge in edges:
+#         graph[edge["from"]].append(edge["to"]) # edge : u -> v, graph[u] = v, indegree[v]+=1
+#         indegree[edge["to"]] += 1
+#     """
+#     Step 04 : Initialize tracking structures
+#             1.output_data_map stores outputs of each node so downstream nodes can access it.
+#             2.execution_order helps for debugging/logging.
+#             3.results stores full execution results (like stdout, outputs, node info).
+#     """
+#     output_data_map = {}   # node_id -> output data
+#     execution_order = []
+#     results = []
+
+#     """
+#     Step 05 : Set up parallel execution
+#             1.A thread pool is used because Python scripts (execute_node) are usually CPU-bound or blocking.
+#             2.Asyncio can then schedule multiple nodes in parallel, but each node runs in its own thread
+#     """
+#     executor = ThreadPoolExecutor(max_workers=4)
+#     loop = asyncio.get_event_loop()
+
+#     """
+#     Step 06 : Identify initial ready nodes
+#             1.These are nodes with no upstream dependencies.
+#             2.They are the first to be executed.
+    
+#     """
+#     ready_nodes = [nid for nid, deg in indegree.items() if deg == 0]
+
+#     print(f"[INFO] Starting pipeline: {pipeline['name']}")
+#     print(f"[INFO] TEMP_DIR: {TEMP_DIR}")
+
+
+#     """
+#     Step 07 : Main loop: execute ready nodes in parallel
+#     """
+#     while ready_nodes:
+#         tasks = []
+
+#         for node_id in ready_nodes:
+#             node = nodes[node_id]
+
+#             # Fetch script using node_id (node_id = script _id)
+#             """
+#             Step 08 : 
+#                     For each ready node:
+#                     Fetch its script from db.scripts.
+#                     Check if it exists.
+#             """
+#             script_doc = await db.scripts.find_one({"_id": ObjectId(node_id)})
+#             if not script_doc:
+#                 raise HTTPException(status_code=400, detail=f"Missing script for node {node_id}")
+
+#             """
+#             Step 09 : Collect inputs from upstream nodes
+#                     1.For nodes with multiple upstream dependencies, all outputs are merged.
+#                     2.If outputs are lists, they are appended into merged_input["data"].
+#                     3.If outputs are dicts, they are merged directly.
+#             """
+#             prev_outputs = [
+#                 output_data_map[src] for src, outs in graph.items() if node_id in outs and src in output_data_map
+#             ]
+            
+#             # merged_input = {}
+#             # for out in prev_outputs:
+#             #     if not out:
+#             #         continue
+#             #     if isinstance(out, dict):
+#             #         merged_input.update(copy.deepcopy(out))
+#             #     elif isinstance(out, list):
+#             #         merged_input.setdefault("data", []).extend(copy.deepcopy(out))
+#             merged_input = {"data": []}
+#             for out in prev_outputs:
+#                 if not out:
+#                     continue
+#                 if isinstance(out, dict) and "data" in out:
+#                     merged_input["data"].extend(copy.deepcopy(out["data"]))
+#                 elif isinstance(out, list):
+#                     merged_input["data"].extend(copy.deepcopy(out))
+
+#             """
+#             Step 10 : Schedule node execution
+#                         1.Each node is run in a thread from the ThreadPoolExecutor.
+#                         2.execute_node is a function that runs the Python script and returns its output
+#             """
+#             # Schedule node execution in thread pool
+#             tasks.append(loop.run_in_executor(executor, execute_node, script_doc, merged_input))
+#         """
+#         Step 11 : Wait for all tasks to complete
+#                     1.asyncio.gather waits for all parallel nodes to finish before moving on.
+#                     2.Ensures that dependent nodes only run after their upstream nodes are done.
+#         """
+#         # Wait for all ready nodes to complete
+#         node_results = await asyncio.gather(*tasks)
+
+#         """
+#         Step 12: Update results and dependencies
+#                     For Each completed node:
+#                         1.Stores output in output_data_map.
+#                         2.Marks its downstream nodes as having one less pending dependency.
+#         """
+#         # Update results and downstream dependencies
+#         for i, node_id in enumerate(ready_nodes):
+#             res = node_results[i]
+#             results.append(res)
+#             output_data_map[node_id] = res["output_data"]
+#             execution_order.append(node_id)
+
+#             print(f"[INFO] Node executed: {node_id} -> {res['node']}")
+
+#             for downstream in graph[node_id]:
+#                 indegree[downstream] -= 1
+#         """
+#         Step 13 : Identify new ready nodes
+#                     1.Nodes whose all dependencies are satisfied are now ready to run.
+#                     2.The while ready_nodes loop continues until all nodes are executed.
+#         """
+#         # Identify new ready nodes (all dependencies satisfied)
+#         ready_nodes = [nid for nid, deg in indegree.items() if deg == 0 and nid not in output_data_map]
+
+#     # Cleanup temporary files
+#     # cleanup_temp_dir()
+#     print(f"[INFO] Pipeline execution order: {execution_order}")
+
+#     return {
+#         "status": "✅ Pipeline executed successfully",
+#         "results": results,
+#         "execution_order": execution_order
+#     }
+
+import asyncio
+import copy
+from concurrent.futures import ThreadPoolExecutor
+from bson import ObjectId
+from fastapi import HTTPException
+
+# from app.config import db, TEMP_DIR
+# from app.services.node_executor import execute_node
+
+
 async def run_pipeline(pipeline_id: str):
     """
-    1. This function executes a pipeline given its pipeline_id.
-    2. It respects the DAG structure of the pipeline (Directed Acyclic Graph),
-    i.e., nodes run only after their upstream dependencies finish.
-    3. It supports parallel execution of nodes that can run independently.
+    Executes a pipeline defined in MongoDB with dependency-based (DAG) scheduling.
+    Prints detailed debug info at every step for dry-run visualization.
     """
-    
-    """
-    Step- 01 : Fetch the pipeline from MongoDB
-    """
+
+    # ---------------- Step 1: Fetch pipeline ----------------
     pipeline = await db.pipelines.find_one({"_id": ObjectId(pipeline_id)})
     if not pipeline:
         raise HTTPException(status_code=404, detail="Pipeline not found")
-    """
-    Step- 02 : Prepare nodes and edges
-            1.nodes is a dictionary mapping each node _id to a simple object.
-            2.edges is a list of connections, each of the form {"from": <node_id>, "to": <node_id>
-    """
-    # node_id -> node mapping
+
+    print("\n\n================= PIPELINE DEBUG TRACE =================")
+    print(f"[LOAD] Pipeline: {pipeline.get('name')}")
+    print(f"[LOAD] Pipeline ID: {pipeline_id}")
+
+    # ---------------- Step 2: Prepare nodes and edges ----------------
     nodes = {n: {"node_id": n} for n in pipeline.get("nodes", [])}
     edges = pipeline.get("connections", [])
+    print(f"\n[STEP 2] Nodes: {list(nodes.keys())}")
+    print(f"[STEP 2] Edges: {edges}")
 
-    """
-    Step 03 : Build dependency Graph
-            1.graph → adjacency list for downstream nodes.
-            2.indegree → number of upstream dependencies for each node.
-            3.This allows us to find ready nodes (nodes with indegree=0) that can run immediately.
-    """
-    graph = {nid: [] for nid in nodes}       # node -> list of downstream nodes
-    indegree = {nid: 0 for nid in nodes}    # node -> number of upstream dependencies
+    # ---------------- Step 3: Build dependency graph ----------------
+    graph = {nid: [] for nid in nodes}
+    indegree = {nid: 0 for nid in nodes}
+
     for edge in edges:
-        graph[edge["from"]].append(edge["to"]) # edge : u -> v, graph[u] = v, indegree[v]+=1
+        graph[edge["from"]].append(edge["to"])
         indegree[edge["to"]] += 1
-    """
-    Step 04 : Initialize tracking structures
-            1.output_data_map stores outputs of each node so downstream nodes can access it.
-            2.execution_order helps for debugging/logging.
-            3.results stores full execution results (like stdout, outputs, node info).
-    """
-    output_data_map = {}   # node_id -> output data
+
+    print(f"\n[STEP 3] Dependency Graph: {graph}")
+    print(f"[STEP 3] Initial Indegree Map: {indegree}")
+
+    # ---------------- Step 4: Initialize tracking ----------------
+    output_data_map = {}
     execution_order = []
     results = []
 
-    """
-    Step 05 : Set up parallel execution
-            1.A thread pool is used because Python scripts (execute_node) are usually CPU-bound or blocking.
-            2.Asyncio can then schedule multiple nodes in parallel, but each node runs in its own thread
-    """
     executor = ThreadPoolExecutor(max_workers=4)
     loop = asyncio.get_event_loop()
 
-    """
-    Step 06 : Identify initial ready nodes
-            1.These are nodes with no upstream dependencies.
-            2.They are the first to be executed.
-    
-    """
+    # ---------------- Step 5: Identify ready nodes ----------------
     ready_nodes = [nid for nid, deg in indegree.items() if deg == 0]
+    print(f"\n[STEP 5] Initial Ready Nodes (no dependencies): {ready_nodes}")
 
-    print(f"[INFO] Starting pipeline: {pipeline['name']}")
     print(f"[INFO] TEMP_DIR: {TEMP_DIR}")
+    print("\n===========================================================")
 
-
-    """
-    Step 07 : Main loop: execute ready nodes in parallel
-    """
+    # ---------------- Step 6: Execute nodes ----------------
     while ready_nodes:
+        print(f"\n[LOOP START] Ready Nodes: {ready_nodes}")
         tasks = []
 
         for node_id in ready_nodes:
             node = nodes[node_id]
 
-            # Fetch script using node_id (node_id = script _id)
-            """
-            Step 08 : 
-                    For each ready node:
-                    Fetch its script from db.scripts.
-                    Check if it exists.
-            """
             script_doc = await db.scripts.find_one({"_id": ObjectId(node_id)})
             if not script_doc:
                 raise HTTPException(status_code=400, detail=f"Missing script for node {node_id}")
 
-            """
-            Step 09 : Collect inputs from upstream nodes
-                    1.For nodes with multiple upstream dependencies, all outputs are merged.
-                    2.If outputs are lists, they are appended into merged_input["data"].
-                    3.If outputs are dicts, they are merged directly.
-            """
             prev_outputs = [
-                output_data_map[src] for src, outs in graph.items() if node_id in outs and src in output_data_map
+                output_data_map[src]
+                for src, outs in graph.items()
+                if node_id in outs and src in output_data_map
             ]
-            
-            # merged_input = {}
+
+            # merged_input = {"data": []}
             # for out in prev_outputs:
             #     if not out:
             #         continue
-            #     if isinstance(out, dict):
-            #         merged_input.update(copy.deepcopy(out))
+                
+            #     if isinstance(out, dict) and "data" in out:
+            #         merged_input["data"].extend(copy.deepcopy(out["data"]))
             #     elif isinstance(out, list):
-            #         merged_input.setdefault("data", []).extend(copy.deepcopy(out))
-            merged_input = {"data": []}
-            for out in prev_outputs:
-                if not out:
-                    continue
-                if isinstance(out, dict) and "data" in out:
-                    merged_input["data"].extend(copy.deepcopy(out["data"]))
-                elif isinstance(out, list):
-                    merged_input["data"].extend(copy.deepcopy(out))
+            #         merged_input["data"].extend(copy.deepcopy(out))
+            # Instead of merging into one list
+            merged_input = []
 
-            """
-            Step 10 : Schedule node execution
-                        1.Each node is run in a thread from the ThreadPoolExecutor.
-                        2.execute_node is a function that runs the Python script and returns its output
-            """
-            # Schedule node execution in thread pool
-            tasks.append(loop.run_in_executor(executor, execute_node, script_doc, merged_input))
-        """
-        Step 11 : Wait for all tasks to complete
-                    1.asyncio.gather waits for all parallel nodes to finish before moving on.
-                    2.Ensures that dependent nodes only run after their upstream nodes are done.
-        """
-        # Wait for all ready nodes to complete
+            for out in prev_outputs:
+                if out:  # ensure output exists
+                    merged_input.append(copy.deepcopy(out))  # keep each node output separate
+
+
+            print(f"\n[DEBUG] Node '{node_id}' Inputs Merged From: {prev_outputs}")
+            print(f"[DEBUG] Node '{node_id}' Merged Input: {merged_input}")
+
+            # Schedule node execution
+            # Fetch node-specific params if present; use empty dict if not defined
+            node_params = pipeline.get("params", {}).get(node_id, {})
+
+            # Schedule node execution
+            tasks.append(loop.run_in_executor(executor, execute_node, script_doc, merged_input, node_params))
+
+            # tasks.append(loop.run_in_executor(executor, execute_node, script_doc, merged_input))
+
         node_results = await asyncio.gather(*tasks)
 
-        """
-        Step 12: Update results and dependencies
-                    For Each completed node:
-                        1.Stores output in output_data_map.
-                        2.Marks its downstream nodes as having one less pending dependency.
-        """
-        # Update results and downstream dependencies
+        # ---------------- Step 7: Update outputs and dependencies ----------------
         for i, node_id in enumerate(ready_nodes):
             res = node_results[i]
-            results.append(res)
             output_data_map[node_id] = res["output_data"]
+            results.append(res)
             execution_order.append(node_id)
 
-            print(f"[INFO] Node executed: {node_id} -> {res['node']}")
+            print(f"\n✅ Node Executed: {node_id}")
+            print(f"   Output Data: {res['output_data']}")
 
             for downstream in graph[node_id]:
                 indegree[downstream] -= 1
-        """
-        Step 13 : Identify new ready nodes
-                    1.Nodes whose all dependencies are satisfied are now ready to run.
-                    2.The while ready_nodes loop continues until all nodes are executed.
-        """
-        # Identify new ready nodes (all dependencies satisfied)
-        ready_nodes = [nid for nid, deg in indegree.items() if deg == 0 and nid not in output_data_map]
+                print(f"   ↓ Decrement indegree of {downstream} → now {indegree[downstream]}")
 
-    # Cleanup temporary files
-    cleanup_temp_dir()
-    print(f"[INFO] Pipeline execution order: {execution_order}")
+        print(f"\n[STATE] Output Data Map: {output_data_map}")
+        print(f"[STATE] Indegree: {indegree}")
+
+        ready_nodes = [nid for nid, deg in indegree.items() if deg == 0 and nid not in output_data_map]
+        print(f"[STATE] Next Ready Nodes: {ready_nodes}")
+        print("-----------------------------------------------------------")
+
+    print(f"\n[FINAL] Pipeline Execution Order: {execution_order}")
+    print("[FINAL] Output Data Map:")
+    for k, v in output_data_map.items():
+        print(f"   {k}: {v}")
+
+    print("===========================================================\n")
+
+    # return {
+    #     "status": "✅ Pipeline executed successfully",
+    #     "results": results,
+    #     "execution_order": execution_order
+    # }
+   
+
+    # Example usage before returning response
+    results_cleaned = clean_for_json(results)
 
     return {
         "status": "✅ Pipeline executed successfully",
-        "results": results,
+        "results": results_cleaned,
         "execution_order": execution_order
     }
 
@@ -229,6 +434,7 @@ async def save_pipeline_to_db(
         "description": pipeline.description or "",
         "nodes": pipeline.nodes,
         "connections": [conn.dict(by_alias=True) for conn in pipeline.connections],
+        "params": pipeline.params or {},   # <-- include node params here
         "created_at": datetime.utcnow(),
         "updated_at": datetime.utcnow()
     }
