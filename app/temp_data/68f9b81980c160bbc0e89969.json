@@ -1,0 +1,23 @@
+{
+  "data": [
+    {
+      "data": [
+        {
+          "order_id": 101,
+          "user_id": 1,
+          "amount": 250
+        },
+        {
+          "order_id": 102,
+          "user_id": 2,
+          "amount": 450
+        },
+        {
+          "order_id": 103,
+          "user_id": 1,
+          "amount": 125
+        }
+      ]
+    }
+  ]
+}

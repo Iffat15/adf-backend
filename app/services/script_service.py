@@ -15,9 +15,15 @@ async def save_script_to_db(node: NodeModel):
     result = await db["scripts"].insert_one(node.model_dump())
     return {"message": "Script uploaded successfully", "id": str(result.inserted_id)}
 
+# async def list_scripts():
+#     scripts = await db["scripts"].find().to_list(100)
+#     return scripts
 async def list_scripts():
     scripts = await db["scripts"].find().to_list(100)
-    return scripts
+    return [
+        {**script, "_id": str(script["_id"])}  # ✅ Convert ObjectId to string
+        for script in scripts
+    ]
 
 async def run_script_by_id(script_id: str):
     try:

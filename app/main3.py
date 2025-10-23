@@ -7,7 +7,7 @@
 # app.include_router(pipelines.router, prefix="/pipelines", tags=["pipelines"])
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
-from app.db_config import test_connection
+from .db_config import test_connection
 from app.routes import scripts, run
 from app.routes import pipelines
 app = FastAPI()

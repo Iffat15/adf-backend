@@ -51,6 +51,7 @@ class ConnectionModel(BaseModel):
         }
 
 class PipelineModel(BaseModel):
+    # id: str= Field(alias="_id")  # ✅ Maps MongoDB _id to id
     name: str
     description: Optional[str] = None
     nodes: List[str]  # list of node _id strings
