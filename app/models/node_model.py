@@ -26,9 +26,11 @@ from typing import Optional, List, Dict
 from datetime import datetime
 
 class NodeModel(BaseModel):
-    id: str= Field(alias="_id")  # ✅ Maps MongoDB _id to id
+    # id: str= Field(alias="_id")  # ✅ Maps MongoDB _id to id
+    id: Optional[str] = Field(default=None, alias="_id")
     name: str
     type: str  # "extract", "transform", "load", etc.
+    # subtype:Optional[str] #"merge", "clean", "map","normalise"(text fields),"currency/units"
     description: Optional[str] = None
     code: str  # store full Python code here
     tags: Optional[List[str]] = []  # optional list of tags

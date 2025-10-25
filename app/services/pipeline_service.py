@@ -417,7 +417,7 @@ async def run_pipeline(pipeline_id: str):
 
     # Example usage before returning response
     results_cleaned = clean_for_json(results)
-
+    cleanup_temp_dir()
     return {
         "status": "✅ Pipeline executed successfully",
         "results": results_cleaned,

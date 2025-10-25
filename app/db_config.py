@@ -39,7 +39,7 @@
 from motor.motor_asyncio import AsyncIOMotorClient
 import os
 from dotenv import load_dotenv
-
+from app.logger import logger
 load_dotenv()
 
 MONGO_URI = os.getenv("MONGO_URI", "mongodb://localhost:27017/")
@@ -53,6 +53,6 @@ db = client[DB_NAME]
 async def test_connection():
     try:
         await client.admin.command("ping")
-        print("✅ MongoDB connection successful")
+        logger.info("MongoDB connection successful")
     except Exception as e:
-        print("❌ MongoDB connection failed:", e)
+        logger.error("MongoDB connection failed:", e)
